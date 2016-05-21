@@ -1,5 +1,5 @@
 from urllib import urlencode
-from urlparse import urlparse, parse_qsl
+from urlparse import parse_qsl
 from uuid import uuid4
 import json
 
