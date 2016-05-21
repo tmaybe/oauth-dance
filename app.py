@@ -18,6 +18,9 @@ twitter_access_token_url = 'https://api.twitter.com/oauth/access_token'
 google_authorize_url = 'https://accounts.google.com/o/oauth2/auth'
 google_access_token_url = 'https://accounts.google.com/o/oauth2/token'
 
+socrata_authorize_url = 'https://data.srcity.org/oauth/authorize'
+socrata_access_token_url = 'https://data.srcity.org/oauth/access_token'
+
 app = Flask(__name__)
 app.secret_key = 'fake'
 
@@ -43,6 +46,9 @@ def authorize():
     elif provider == 'google':
         return authorize_google(key, secret, callback, str(uuid4()))
     
+    elif provider == 'socrata':
+        return authorize_socrata(key, secret, callback, str(uuid4()))
+
     else:
         raise Exception()
 
@@ -69,7 +75,14 @@ def callback():
                 callback)
 
         return callback_google(*args)
-    
+
+    elif session['provider'] == 'socrata':
+        args = (session['client_id'], session['client_secret'],
+                request.args.get('code'), request.args.get('state'),
+                callback)
+
+        return callback_socrata(*args)
+
     else:
         raise Exception()
 
@@ -121,6 +134,19 @@ def authorize_google(client_id, client_secret, redirect_uri, state):
                                   access_type='offline', approval_prompt='force'))
     
     return redirect(google_authorize_url + '?' + query_string)
+
+def authorize_socrata(client_id, client_secret, redirect_uri, state):
+    ''' https://sandbox.socrata.com/oauth/authorize?client_id=YOUR_AUTH_TOKEN&response_type=code&redirect_uri=YOUR_REDIRECT_URI
+    '''
+    session['provider'] = 'socrata'
+    session['client_id'] = client_id
+    session['client_secret'] = client_secret
+    session['state'] = state
+
+    query_string = urlencode(dict(client_id=client_id, redirect_uri=redirect_uri,
+                                  state=state, response_type='code'))
+
+    return redirect(socrata_authorize_url + '?' + query_string)
 
 def callback_github(client_id, client_secret, code, state):
     '''
@@ -185,6 +211,28 @@ def callback_google(client_id, client_secret, code, state, redirect_uri):
     return jsonify(dict(client_id=client_id, client_secret=client_secret,
                         access_token=access_token, token_type=token_type,
                         refresh_token=refresh_token))
+
+def callback_socrata(client_id, client_secret, code, state, redirect_uri):
+    '''https://sandbox.socrata.com/oauth/access_token
+        ?client_id=YOUR_AUTH_TOKEN
+        &client_secret=YOUR_SECRET_TOKEN
+        &grant_type=authorization_code
+        &redirect_uri=YOUR_REDIRECT_URI
+        &code=CODE
+    '''
+    if state != session['state']:
+        raise Exception()
+
+    data = dict(client_id=client_id, client_secret=client_secret,
+                code=code, redirect_uri=redirect_uri,
+                grant_type='authorization_code')
+
+    resp = post(socrata_access_token_url, data=data)
+    access = json.loads(resp.content)
+    access_token = access['access_token']
+
+    return jsonify(dict(client_id=client_id, client_secret=client_secret,
+                        access_token=access_token))
 
 if __name__ == '__main__':
     app.run(debug=True)
