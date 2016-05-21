@@ -28,6 +28,7 @@
             <button name="provider" value="github" type="submit">Go Github</button>
             <button name="provider" value="twitter" type="submit">Go Twitter</button>
             <button name="provider" value="google" type="submit">Go Google</button>
+            <button name="provider" value="socrata" type="submit">Go Socrata</button>
         </p>
 
         <h3>How To</h3>
@@ -62,7 +63,7 @@
     <p>
         <a href="static/github-app.png">Sample Github app screenshot</a>.
     </p>
-    
+
     {% if host == '127.0.0.1:5000' %}
         <form action="/authorize" method="post">
             <p>
