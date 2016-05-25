@@ -18,8 +18,8 @@ twitter_access_token_url = 'https://api.twitter.com/oauth/access_token'
 google_authorize_url = 'https://accounts.google.com/o/oauth2/auth'
 google_access_token_url = 'https://accounts.google.com/o/oauth2/token'
 
-socrata_authorize_url = 'https://data.srcity.org/oauth/authorize'
-socrata_access_token_url = 'https://data.srcity.org/oauth/access_token'
+socrata_authorize_url = 'https://{netloc}/oauth/authorize'
+socrata_access_token_url = 'https://{netloc}/oauth/access_token'
 
 app = Flask(__name__)
 app.secret_key = 'fake'
@@ -33,8 +33,8 @@ def index():
 
 @app.route('/authorize', methods=['POST'])
 def authorize():
-    vars = 'provider', 'key', 'secret'
-    provider, key, secret = (request.form.get(var) for var in vars)
+    vars = 'provider', 'key', 'secret', 'netloc'
+    provider, key, secret, netloc = (request.form.get(var) for var in vars)
     callback = '{0}://{1}/callback'.format(request.scheme, request.host)
 
     if provider == 'github':
@@ -47,7 +47,7 @@ def authorize():
         return authorize_google(key, secret, callback, str(uuid4()))
     
     elif provider == 'socrata':
-        return authorize_socrata(key, secret, callback, str(uuid4()))
+        return authorize_socrata(key, secret, callback, netloc, str(uuid4()))
 
     else:
         raise Exception()
@@ -78,7 +78,7 @@ def callback():
 
     elif session['provider'] == 'socrata':
         args = (session['client_id'], session['client_secret'],
-                request.args.get('code'), request.args.get('state'),
+                request.args.get('code'), session['netloc'], request.args.get('state'),
                 callback)
 
         return callback_socrata(*args)
@@ -135,18 +135,19 @@ def authorize_google(client_id, client_secret, redirect_uri, state):
     
     return redirect(google_authorize_url + '?' + query_string)
 
-def authorize_socrata(client_id, client_secret, redirect_uri, state):
+def authorize_socrata(client_id, client_secret, redirect_uri, netloc, state):
     ''' https://sandbox.socrata.com/oauth/authorize?client_id=YOUR_AUTH_TOKEN&response_type=code&redirect_uri=YOUR_REDIRECT_URI
     '''
     session['provider'] = 'socrata'
     session['client_id'] = client_id
     session['client_secret'] = client_secret
+    session['netloc'] = netloc
     session['state'] = state
 
     query_string = urlencode(dict(client_id=client_id, redirect_uri=redirect_uri,
                                   state=state, response_type='code'))
 
-    return redirect(socrata_authorize_url + '?' + query_string)
+    return redirect(socrata_authorize_url.format(netloc=netloc) + '?' + query_string)
 
 def callback_github(client_id, client_secret, code, state):
     '''
@@ -212,7 +213,7 @@ def callback_google(client_id, client_secret, code, state, redirect_uri):
                         access_token=access_token, token_type=token_type,
                         refresh_token=refresh_token))
 
-def callback_socrata(client_id, client_secret, code, state, redirect_uri):
+def callback_socrata(client_id, client_secret, code, netloc, state, redirect_uri):
     '''https://sandbox.socrata.com/oauth/access_token
         ?client_id=YOUR_AUTH_TOKEN
         &client_secret=YOUR_SECRET_TOKEN
@@ -227,7 +228,7 @@ def callback_socrata(client_id, client_secret, code, state, redirect_uri):
                 code=code, redirect_uri=redirect_uri,
                 grant_type='authorization_code')
 
-    resp = post(socrata_access_token_url, data=data)
+    resp = post(socrata_access_token_url.format(netloc=netloc), data=data)
     access = json.loads(resp.content)
     access_token = access['access_token']
 
